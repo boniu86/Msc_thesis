@@ -3,6 +3,9 @@ library(readr)
 library(lubridate)
 library(skimr)
 library(olsrr)
+library(sjstats)
+library(car)
+
 Sys.setlocale(category = "LC_ALL", locale = "English_United States.1252")#english datetime
 
 ##load data weather from 
@@ -49,18 +52,37 @@ IESO<-(IESO.raw
 )#day ahead prediction from Oct 9 to Dec 31
 
 ##try forward selection and backward elimination for lm;
+set.seed(123)
+sample<-sample(1:nrow(all_weather),240)
+train<-all_weather[sample,]
 
-
-
-model<-lm(Demand~.,data=all_weather)
-
-k=ols_all_subset(model)
-
-ols_step_forward(model)
-
-null<-lm(Demand~1,data = all_weather)
-full<-lm(Demand~.,data=all_weather)
+null<-lm(Demand~1,data = train)
+full<-lm(Demand~.,data=train)
 step(null, scope=list(lower=null, upper=full), direction="forward")
+for_model<-lm(Demand ~ Hr_of_day + Temperature + Day_of_week + 
+                Cloud_Cover + Pressure + Apparent_Temperature + 
+                Ozone + Humidity,data=train)
+
+for2_model<-lm(Demand~Hr_of_day + Temperature + Day_of_week + 
+                 Cloud_Cover + Pressure  + 
+                 Ozone + Humidity,data=train)
+anova(for_model,for2_model,test="Chisq")#as good as full model
+Anova(for2_model)
+par(mfrow=c(2,2))
+plot(for2_model)
+
+cohens_f(for2_model)
+Anova(for2_model)
+anova_stats(for2_model)
+
+step(full, data=train, direction="backward")
+#Demand ~ Apparent_Temperature + Cloud_Cover + Dew_Point + 
+#Humidity + Ozone + Pressure + Visibility + Day_of_week + 
+#  Hr_of_day
+back_model<-lm(Demand ~ Apparent_Temperature + Cloud_Cover + Dew_Point + 
+                 Humidity + Ozone + Pressure + Visibility + Day_of_week + 
+                 Hr_of_day, data = train)
+Anova(back_model)
 
 
 
@@ -80,9 +102,12 @@ for (i in ((0:83))){
   
   IESO_error<-sqrt(1/24*(sum(((Test_7days_1$Demand- IESO_prediction_1)^2))))
   
-  Final_LM_day_ahead<-lm(Demand ~ Hr_of_day + Temperature + Day_of_week + 
-                           Cloud_Cover + Pressure + Apparent_Temperature + Visibility + 
-                           Ozone + Wind_Speed,
+  Final_LM_day_ahead<-lm(Demand ~ Apparent_Temperature + Cloud_Cover + Dew_Point + 
+                           Humidity + Ozone + Pressure + Visibility + Day_of_week + 
+                           Hr_of_day,
+                           #Hr_of_day + Temperature + Day_of_week + 
+                           #Cloud_Cover + Pressure + Apparent_Temperature + Visibility + 
+                           #Ozone + Wind_Speed,
                          data=Train_7days_1)
   OLM_7days_1<-predict(Final_LM_day_ahead,Test_7days_1,type = "response")
   
@@ -107,3 +132,8 @@ for (i in ((0:83))){
 }
 
 
+##forward model:50663.17
+##backward model:51664.45
+
+
+sum(MSE_fit)
