@@ -60,18 +60,12 @@ null<-lm(Demand~1,data = train)
 full<-lm(Demand~.,data=train)
 step(null, scope=list(lower=null, upper=full), direction="forward")
 for_model<-lm(Demand ~ Hr_of_day + Temperature + Day_of_week + 
-                Cloud_Cover + Pressure + Apparent_Temperature + 
-                Ozone + Humidity,data=train)
+                Cloud_Cover + Visibility,data=train)
 
-for2_model<-lm(Demand~Hr_of_day + Temperature + Day_of_week + 
-                 Cloud_Cover + Pressure  + 
-                 Ozone + Humidity,data=train)
-anova(for_model,for2_model,test="Chisq")#as good as full model
-Anova(for2_model)
 par(mfrow=c(2,2))
-plot(for2_model)
 
-cohens_f(for2_model)
+
+cohens_f(for_model)
 Anova(for2_model)
 anova_stats(for2_model)
 
@@ -79,12 +73,19 @@ step(full, data=train, direction="backward")
 #Demand ~ Apparent_Temperature + Cloud_Cover + Dew_Point + 
 #Humidity + Ozone + Pressure + Visibility + Day_of_week + 
 #  Hr_of_day
-back_model<-lm(Demand ~ Apparent_Temperature + Cloud_Cover + Dew_Point + 
-                 Humidity + Ozone + Pressure + Visibility + Day_of_week + 
-                 Hr_of_day, data = train)
+back_model<-lm( Demand ~ Cloud_Cover + Dew_Point + Humidity + Visibility + 
+                  Day_of_week + Hr_of_day,
+                #Demand ~ Apparent_Temperature + Cloud_Cover + Dew_Point + 
+                 #Humidity + Ozone + Pressure + Visibility + Day_of_week + 
+                 #Hr_of_day, 
+             data = train)
+
+
 Anova(back_model)
+cohens_f(back_model)
 
 
+anova(for2_model,back_model,test="Chisq")
 
 set.seed(1234)
 OLM_7days<-c()
@@ -102,12 +103,12 @@ for (i in ((0:83))){
   
   IESO_error<-sqrt(1/24*(sum(((Test_7days_1$Demand- IESO_prediction_1)^2))))
   
-  Final_LM_day_ahead<-lm(Demand ~ Apparent_Temperature + Cloud_Cover + Dew_Point + 
-                           Humidity + Ozone + Pressure + Visibility + Day_of_week + 
-                           Hr_of_day,
-                           #Hr_of_day + Temperature + Day_of_week + 
-                           #Cloud_Cover + Pressure + Apparent_Temperature + Visibility + 
-                           #Ozone + Wind_Speed,
+  Final_LM_day_ahead<-lm(Demand ~ Cloud_Cover + Dew_Point + Humidity + Visibility + 
+                           Day_of_week + Hr_of_day,
+                          #Demand ~ Apparent_Temperature + Cloud_Cover + Dew_Point + 
+                           #Humidity + Ozone + Pressure + Visibility + Day_of_week + 
+                           #Hr_of_day,
+                           
                          data=Train_7days_1)
   OLM_7days_1<-predict(Final_LM_day_ahead,Test_7days_1,type = "response")
   
@@ -132,8 +133,8 @@ for (i in ((0:83))){
 }
 
 
-##forward model:50663.17
-##backward model:51664.45
+##forward model:47740.33
+##backward model: 48279.18
 
 
 sum(MSE_fit)
