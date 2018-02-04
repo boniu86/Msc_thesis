@@ -5,6 +5,17 @@ library(skimr)
 library(olsrr)
 library(sjstats)
 library(car)
+library(ggplot2)
+library(GGally)
+
+library(gridExtra)
+
+library(Hmisc)
+library(psych)
+library(effects)
+library(interplot)
+library(rJava)
+
 
 Sys.setlocale(category = "LC_ALL", locale = "English_United States.1252")#english datetime
 
@@ -37,8 +48,13 @@ all_weather<-(weather.raw
             %>%rename(Demand=X4)
             %>%mutate(Demand=as.numeric(Demand),
                       Wind_Bearing=as.numeric(Wind_Bearing))
-            %>%select(-c(Icon,DateTime))
+            #%>%select(-c(Icon,DateTime))
 )
+
+
+
+
+
 
 
 skim(all_weather)##summary of data...other summary, may consider later
@@ -84,8 +100,7 @@ back_model<-lm( Demand ~ Cloud_Cover + Dew_Point + Humidity + Visibility +
 Anova(back_model)
 cohens_f(back_model)
 
-
-anova(for2_model,back_model,test="Chisq")
+anova(for_model,back_model,test="Chisq")
 
 set.seed(1234)
 OLM_7days<-c()
@@ -138,3 +153,4 @@ for (i in ((0:83))){
 
 
 sum(MSE_fit)
+sum(MSE_IESO)
