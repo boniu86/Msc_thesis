@@ -1,0 +1,260 @@
+---
+output:
+  pdf_document:
+    fig_caption: yes
+    number_sections: yes
+title: "Introduction"
+author: "Ruoyuan Li"
+date: "February 6, 2018"
+fontsize: 11pt
+geometry: margin=1in
+header-includes:
+   - \linespread{1.5}
+   - \usepackage{amsmath}
+   - \usepackage{subfig}
+---
+
+# Introduction 
+Nowadays, electricity power plays a significant role in people's daily life. Running school, hospitals, subway, business and house all require large amount of electricity power. From various of public service to each individual, modern life based on consistent and enough electricity power supply to meet Society's needs.\par
+
+## **IESO**
+In Ontario, \textbf{Independent Electricity System Operator (IESO)} is the one who operate electricity power system in real time, which means \textbf{IESO} ensuring energy supply and demand meets Ontario's needs based on second-by-second basis; oversee Ontario electricity market, that is \textbf{IESO} operates and settles the electricity wholesale market while the price based on accepted offers to supply electricity against the predicted demand. Meanwhile, \textbf{IESO} also plan for future energy needs, such like 18 month ahead outlook which is a report shows maximum hourly power demand on weekly basis for next 18 month period of time, also provides short term hourly demand and supply prediction within a month. \textbf{IESO} works for promoting conservation too, provided energy saving programs targeted both business and residents, and support new technologies for clean and efficient energy cost.\par
+
+
+
+
+## NRG Matters Corporation
+This thesis is corporate work with \textbf{NRG Matters Corporation} which locates in Oakville, ON. The company focuses on help class A clients to reduce their electricity bills by reducing global adjustment cost. The Global Adjustment is a line charge on monthly electricity bill which used to cover the difference of energy market price and rates to paid to regulated and contracted  generators, and to pay for conservation and demand management programs (NRG Matters, 2016). Global Adjustment charges are exceed the cost of energy itself now, recent regulation changes allow consumers who are qualifying to be Class A consumers whose maximum hourly demand over 1 MW can choose their GA will be charged based on their consumption during the top five peak demand hours in the province within one calender year.\par
+
+
+Moreover, this thesis work is for developing a better models for forecasting future electricity demand in short term period to help \textbf{NRG Matters} understand future demand trend and help their clients prevent large consumption from the market during high demand hours. This thesis focus on short term electricity power forecast which is 24 hours ahead average hourly energy demand prediction. There are three methods have been used, Ordinary Least Square Regression (OLSR), General Additive Model (GAM), and classification tree including random forest method. \par
+
+
+Simply said, short term electricity energy demand are correlated to weather conditions. In hot summer days with high temperature, Ontario requires large consumption of energy to ensure air conditioner running, meanwhile in cold winter days with lower temperature in Ontario requires more consumption from market too. Therefore, weather condition are sensitive to market energy demand  in Ontario. This thesis pointed out how temperature and associated weather information are correlated to hydro demand in Ontario, also make a comparison between \textbf{IESO} predictions and the three methods' predictions which mentioned before.\par
+
+
+## Thesis Objectives
+The thesis is organized as follows. Section 2  explains basic data information, such as how to organize predictor variables and response variables, following with few plots dress out some features about the dataset. Section 3 introduced the methodologies of ordinary least square model in $\mathbf{R}$, then fitness of ordinary least square model for the dataset, at the end compared the results between OLSM and \textbf{IESO}'s predictions. Section 4 and Section 5 following same procedures as Section 3, along with general additive model and random forest method. Section 6 is conclusion and recommendation for future work.
+
+
+# Data Description and Data Visualization
+
+The Toronto's weather data and actual demand data both downloaded directly from **NRG Matters** 's website, the original data can be founded at **Weather Netwrok** and historical energy demand from website of **IESO**. 
+
+The overview of dataset is following:
+```{r message=FALSE,echo=FALSE,results='hide'}
+library(knitr)
+library(tidyverse)
+library(readr)
+library(lubridate)
+
+```
+```{r message=FALSE,echo=FALSE,results='hide',warning=FALSE}
+Sys.setlocale(category = "LC_ALL", locale = "English_United States.1252")#english 
+
+##load data weather from 
+weather.file.list <- list.files(pattern="*_2017.csv$")
+weather.raw <- lapply(weather.file.list, read_csv)
+
+all_weather<-(weather.raw
+              %>%bind_rows()#bind all csv together
+              %>%filter(Partition_Key=="CYYZ")
+              %>%distinct(Local_Time,.keep_all = TRUE)
+              %>%select(-c(Partition_Key,Row_Key,Precip_Accumulation,
+                           Precip_Intensity,Precip_Probability,
+                           Precip_Type,Summary,UTC_Time,Local_Time,Wind_Bearing,Ozone))
+              %>%mutate(DateTime=seq(ymd_hm("2017-09-29 00:00"),  #add date and time
+                                     ymd_hm("2017-12-31 23:00"),by="hour"),
+                        Day_of_week=as.factor(weekdays(DateTime,abbreviate = FALSE)),
+                        Day_of_week=fct_recode(Day_of_week,  #collapse 7 levels to 2 levels
+                                               wkday="Monday", 
+                                               wkday="Tuesday",
+                                               wkday="Wednesday",
+                                               wkday="Thursday",
+                                               wkday="Friday", 
+                                               wknd="Saturday",
+                                               wknd="Sunday"),
+                        Hr_of_day=as.factor(format(as.POSIXct(DateTime),"%H")))
+              %>%bind_cols((read_csv("On_Demand_29_Sep_31_Dec.csv",col_names = FALSE)
+                            %>%select(X4)))#combine demand in
+              %>%rename(Demand=X4)
+              %>%mutate(Demand=as.numeric(Demand))
+              %>%select(-c(Icon,DateTime))
+)
+
+
+##load all ieso day ahead prediction
+IESO.file.list <- list.files(pattern="*_IESO.csv$")
+IESO.raw <- lapply(IESO.file.list, read_csv,col_names=FALSE)
+IESO<-(IESO.raw
+       %>%bind_rows()
+)#day ahead prediction from Oct 9 to Dec 31
+
+
+```
+```{r results='asis',echo=FALSE,message=FALSE,warning=FALSE}
+library(skimr)
+library(knitr)
+library(kableExtra)
+
+kable(head(all_weather[,-c(9,10)]),format="latex") %>%
+  kable_styling(full_width = T)%>%
+  row_spec(0, angle = 45)
+```
+
+
+
+
+There are 11 varaibles in total with 2256 observations, Date/Time ranges from Sep 29, 2017 at 00:00 to Dec 31, 2017 at 23:00. The detail for each independent numeric variables are:
+
+
+1. Apparent Temperature: unit is celsius, it is the temperature equivalent perceived by humans, caused by the combined effects of air temperature, relative humidity and wind speed.
+
+
+2. Could Cover: unit is percentage, it is the fraction of sky coverd by cloud. 
+
+
+3. Dew Point: unit is celsius, it is the temperature at where the air totally saturated. 
+
+4. Humidity: unit is percentage, it is the amount of water vapor in the air. Higher humidity causes decreasing of the power of sweating of human body for cooling purpose.  
+
+
+5. Pressure: unit is  Pascals ( Pa ), it is atmospheric pressure, the standared pressure on the ground is around 1 Pa. 
+
+
+6. Temperature: unit is celsius, it is a physical quantities for expressing cold and hot. 
+
+
+7. Visibility: unit is km, it is a measure of distance of an object can be distinguished. 
+
+
+8. Wind Speed: unit is km/h, it is the velocity of wind moving from high pressure to low pressure, wind speed changes with temperature usually. 
+
+
+To get better understanding of those independent numerical variables, Fig 1 is correlated plot matrix with smooth line, the method of smooth is "gam" (general additive model) since there are more than two thuosands observations.  Moreover, dependent variable is **Demand**, which is average hourly energy demand in Ontario, the unit is megawatts.\par
+
+
+
+![Correlation plot matrix with gam smooth line](dv_correlated_plot.png)
+
+
+Also, there are two categorical varaibles, "Hr_of_day" has 24 levels which represents for each hour within a day, and "day_of_week" has 2 levels which represents weekday and weekend. The idea of adding those two categorical variables are coming from scatter plot of energy demand and Date/Time which is Fig 2. The first day is Friday (2017-09-29) and the last day is Sunday (2017-10-15), it clearly shows intra-day pattern (24 hours day). As for weekly pattern (7 days a week) is invisible, however, weekdays and weekend has distinguished pattern. 2017-09-30, 2017-10-01, 2017-10-07, 2017-10-08, 2017-10-14 and 2017-10-15 are weekends, there are lower energy demand compared to weekday. 
+
+
+![Scatter plot of Date and Demand](dv_scatter_plot_1.png)
+
+Fig 3 is boxplots showing distribution for each hour levels and each day of week levels, weekends are less than weekday, so the size of weekend box is smaller than weekday box. Red dot within each plot represent mean. Both boxplots indicates there is distinguied difference for each level,  there is no need for collapse factor levels. \par
+
+```{r message=FALSE,echo=FALSE,results='hide',warning=FALSE}
+d3<-(ggplot(all_weather,aes(x=Hr_of_day, y=Demand))
+     +geom_boxplot(varwidth=TRUE,alpha=0.7)
+     +labs(title="energy demand for each hour")
+     +stat_summary(fun.y=mean, colour="darkred", geom="point", 
+                   shape=18, size=3) 
+     
+)
+d4<-(ggplot(all_weather,aes(x=Day_of_week,y=Demand))+
+       geom_boxplot(varwidth=TRUE)
+     +labs(title="erengy demand for weekend/weekday")
+     +stat_summary(fun.y=mean, colour="darkred", geom="point", 
+                   shape=18, size=3)
+)
+```
+```{r fig.show='asis', echo=FALSE, warning=FALSE, message=FALSE,fig.width=5,fig.height=3}
+library(gridExtra)
+grid.arrange(d3, d4, ncol=2)
+```
+
+
+
+
+Next moving to basic variable exploration by **R** package **mlr** which is machine learning in **R**. It uses regression method for basically analyzing each variables.
+Based on result plots, "Hr_of_day" plays siginificant role in this data since has three out of five wining. Also "Temperature" and "Dew point" play major roles too. 
+
+```{r message=FALSE,echo=FALSE,results='hide',warning=FALSE}
+IESO.file.list <- list.files(pattern="*_IESO.csv$")
+IESO.raw <- lapply(IESO.file.list, read_csv,col_names=FALSE)
+IESO<-(IESO.raw
+       %>%bind_rows()
+)#day ahead prediction from Oct 9 to Dec 31
+```
+
+```{r message=FALSE,echo=FALSE,results='hide',warning=FALSE}
+
+
+library(Hmisc)
+library(psych)
+library(effects)
+library(interplot)
+library(rJava)
+library(broom)
+library(effects)
+library(tibble)
+library(mlr)
+
+#theme_setting
+my_theme <- function(base_size =8, base_family = "sans"){
+  theme_minimal(base_size = base_size, base_family = base_family) +
+    theme(
+      axis.text = element_text(size =8),
+      axis.text.x = element_text(angle = 60, vjust = 0.5, hjust = 0.5),
+      axis.title = element_text(size =8),
+      panel.grid.major = element_line(color = "gray"),
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(fill = "#f7fdff"),
+      strip.background = element_rect(fill = "#001d60", color = "#00113a", size =0.5),
+      strip.text = element_text(face = "bold", size = 8, color = "white"),
+      legend.position = "hide",
+      legend.justification = "center",
+      legend.background = element_blank(),
+      panel.border = element_rect(color = "grey5", fill = NA, size = 0.5)
+    )
+}
+theme_set(my_theme())
+
+myfillcolors=c("#ff003f","#0094ff", "#ae00ff" , "#94ff00", "#ffc700","#fc1814",
+               "#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7",
+               "#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7",
+               "#000099","#CC0000","#db0229","#026bdb")
+
+mycolors=c("#db0229","#026bdb","#48039e","#0d7502","#c97c02","#c40c09",
+           "#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7",
+           "#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7",
+           "#000099","#CC0000","#ff003f","#0094ff")
+
+
+task= makeRegrTask(id = "demand", data=all_weather,target = "Demand")
+lrn=makeLearner("regr.glm")
+pmi=generateFilterValuesData(task,method="permutation.importance",imp.learner=lrn)%>%.$data%>%ggplot(aes(x=reorder(name,permutation.importance),y=permutation.importance,fill=reorder(name,permutation.importance)))+geom_bar(stat="identity",color="black",show.legend=F)+scale_fill_manual(values=myfillcolors,name="permut.Importance")+scale_x_discrete("Features")
+
+uni=generateFilterValuesData(task,method="univariate.model.score",learner=lrn)%>%.$data%>%ggplot(aes(x=reorder(name,univariate.model.score),y=univariate.model.score,fill=reorder(name,univariate.model.score)))+geom_bar(stat="identity",color="black",show.legend=F)+scale_fill_manual(values=myfillcolors,name="Univar Score")+scale_x_discrete("Features")
+
+gt=generateFilterValuesData(task,method="gain.ratio")%>%.$data%>%ggplot(aes(x=reorder(name,gain.ratio),y=gain.ratio,fill=reorder(name,gain.ratio)))+geom_bar(stat="identity",color="black",show.legend=F)+scale_fill_manual(values=myfillcolors,name="Gain ratio")+scale_x_discrete("Features")
+
+ig=generateFilterValuesData(task,method="information.gain")%>%.$data%>%ggplot(aes(x=reorder(name,information.gain),y=information.gain,fill=reorder(name,information.gain)))+geom_bar(stat="identity",color="black",show.legend=F)+scale_fill_manual(values=myfillcolors,name="information gain")+scale_x_discrete("Features")
+
+csq=generateFilterValuesData(task,method="chi.squared")%>%.$data%>%ggplot(aes(x=reorder(name,chi.squared),y=chi.squared,fill=reorder(name,chi.squared)))+geom_bar(stat="identity",color="black")+scale_fill_manual(values=myfillcolors,name="features")+scale_x_discrete("Features")
+
+
+```
+```{r fig.show='asis', echo=FALSE, warning=FALSE, message=FALSE}
+grid.arrange(pmi,uni,gt,ig,csq,ncol=3)
+```
+
+permutarion importance:Estimate how important individual features or groups of features are by contrasting prediction performances. For method “permutation.importance” compute the change in performance from permuting the values of a feature (or a group of features) and compare that to the predictions made on the unmcuted data. 
+Aggregated difference between feature permuted and unpermuted predictions.\par
+
+
+univariate.model.socre: Resamples an mlr learner for each input feature individually. The resampling performance is used as filter score, with rpart as default learner.\par
+
+gain.ratio: uses the entropy-based information gain ratio between each feature and target individually as an importance measure. Entropy-based gain ratio between feature and target. \par
+
+information.gain: Entropy-based information gain between feature and target. \par
+
+chisq:The chi-square test is a statistical test of independence to determine whether
+two variables are independent. Filter {chi.squared} applies this
+ test in the following way. For each feature the chi-square test statistic is
+computed checking if there is a dependency between the feature and the target
+variable. Low values of the test statistic indicate a poor relationship. High
+values, i.e., high dependency identifies a feature as more important. \par
+

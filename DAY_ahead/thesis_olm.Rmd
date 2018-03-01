@@ -1,0 +1,94 @@
+---
+title: "Multiple Regression Method"
+author: "Ruoyuan Li"
+date: "February 4, 2018"
+output: pdf_document
+fontsize: 11pt
+geometry: margin=1in
+header-includes:
+   - \linespread{1.5}
+   - \usepackage{amsmath}
+   
+  
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Multiple Linear Regression Model
+
+## Model description
+Short term electricity forecasting based on multiple regression linear model is a estimation method which using weighted least sqaure. It estimates the linear statistical realationship between dependent variable referred to hourly demand, and independent varaibles referred to weather information and date & time. Basically, the multiple linear regression model can be expressed as:
+\begin{equation*}
+y_{i}=\beta_{0}+\beta_{1} x_{i1}+ \dotsi + \beta_{k} x_{ik} + \varepsilon_{i},
+\thinspace \text{for} \thinspace i=1 \dotsi n
+\end{equation*}
+where $k=12$ since there are 12 independent varaibles in the data, $\beta_{i}$ are regression coefficients, and $x_{i}$ are independent variables such as time, temperature, humidity etc.  There are thres assumption of $\varepsilon_{i}$:
+\begin{enumerate}
+\item $E(\varepsilon_{i})=0, \thinspace \text{for} \thinspace i=1 \dotsi 24$
+\item $Var(\varepsilon_{i})=\sigma^2,  \text{for}  \thinspace i=1 \dotsi 24$ 
+\item $Cov(\varepsilon_{i},\varepsilon_{j})=0  \thinspace \text{for}  \thinspace i \ne j$ 
+\end{enumerate}
+With those assumptions hold, the estimator $\beta_{i}$ holds the properties that can be estimated. Moreover, estimations may be poorly estimates if one or more assumptions failed. The daignostic plots will be following after fitting the model. 
+
+## Varaibles selection
+There are two varaibles selection, forward selection and backward elimination to find the best model. There is a build in \textbf{R} function \textbf{step()} can be used for selecting varaibles automatically, forward selection add one varaible by each time and ended with best fit model which indicates the lowest AIC value. And the backward elimination starts with all independent varaibles included in this model and elinimates one by one for each time until find the best fit model with lowest AIC value as well. "AIC is called Akaike information criterion, An index used in a number of areas as an aid to choosing between competing models, it defined as: $-2L_{m}+2m$, where $L_{m}$ is maximum \textit{log-likelihood} and $m$ is number of statistical parameters in the model. The index takes into account both the statistical goodness of fit and the number of parameters that have to be estimated to achieve this particular degree of fit, by imposing a penalty for increasing the number of parameters. Lower values of the index indicate the preferred model, that is, the one with the fewest parameters that still provides an adequate fit to the data." (Everitt, 1998, The Cambridge Dictionary of Statistics ). The data used in varaible selection algorithm are 240 observations which are randomlly selected from the whole dataset.\par
+Forward selection needs to specifying starting linear model called null model and the range of models want to be performed called full model before performing selection algorithm.
+
+* null model can be expressed as: null = lm ( Demand~1, data )
+
+
+* full model can be expressed as: full = lm( Demand~ ., data ), where the dot inside linear model refered to all independent varaibles.
+
+After setting null model and full model, then use command:
+
+* step(null, scope=list(lower=null, upper=full), direction="forward"))
+
+\textbf{R} will starting selection with null model, and search all the possbile model lying within the range of full model. Eventually it ends with the best model at the end of output list. In this case, the best model with lowest AIC equals to 3858.734 from forward selection is:  
+$$
+\text{formula 1} = \text{Demand} \sim \text{Hr of day} + \text{Temperature} +\text{Day of week} + \text{Cloud Cover} + \text{Visibility}
+$$
+\par 
+The backward elimination is quite similar to this, but strating with full model which states the range of the model, next by using command
+
+* step(full, data, direction="forward")
+
+then ends with model with lowest AIC value equals to 3858.239 as following:
+$$
+\text{formula 2}=\text{Demand} \sim \text{Cloud Cover} + \text{Dew Point} + \text{Humidity} + \text{Visibility} +\text{Day of week} + \text{Hr of day}
+$$
+With those 2 models selected by automatic variables selection, their AIC values are close to each other, moreover it is hard to make comparison of performance between those 2 models just based on AIC. However, the following will use both models for examination and simulation steps. Eventually comparing their performance by prediction from simulation step.  Next continue with examinination and diagnostics of the models. 
+
+## Diagnostics & Model Examination 
+
+Diagnostics are used for checking model assumptions, and investigate the large influence on analysis made by observations.   
+Frist looks at diagnostics plots of model selected by forward selection, which is model 1. 
+
+![Diagnostic plots for model 1](lm_diag_for_model.png)
+
+Based on this matrix of plots, there is no significant problems of model 1 can be observed. Upper left is residual versus fitted value plot, it randomly separated around $y=0$ line which indicates linearity holds. Normal Q-Q plot located at upper right has a little curveture at the tail, but the overall plot lies well around 45 degree line, which reffered normality assumption holds. The lower position plots are use for checking pattern of residual and influence of each observations, they behave roughly random around $y=0$ line with little curvature which is acceptable for pratical data fitting. \par
+Same procedure for model 2 which is fitting by formula 2, the plots as following:
+
+![Diagnostic plots for model 2](lm_diag_back_model.png)
+
+Similar interparation can be concluded, also there exsit no observed and unacceptable problems with those plots drawn from model 2 which fitting by formula 2. \par
+
+Now move to model summary and anova table, following with effect size, coefficients plot and marginal effect plots. (left anova table and summary for now) \par
+Effect size is a measure of the size of effect between different two groups, rather than \textit{p-value} only indicates there exist statistically significance. "The main one is that the p-value depends essentially on two things: the size of the effect and the size of the sample. One would get a 'significant' result either if the effect were very big (despite having only a small sample) or if the sample were very big (even if the actual effect size were tiny)" (Robert Coe, 2002). Effect size can be treated as true measure of significant difference (Robert Coe, 2002). There are twi major family of effect size calculation, one is standardized mean difference which belongs to $d$ famliy, another one is measure of association strength which belongs to $r$ famliy (Rosenthal, 1994), more differentiation within each family is whether they correct for bias or not (Thompson, 2007), Hedges' $g$ is correction for cohen'$d$ effect size from $d$ famliy, and  the correction for eta squared ($\eta^2$) is known as omega squared ($\omega^2$) from $r$ famliy (Daniël Lakens, 2013). In this paper, effect size calculated through cohen's f method, which is calculates local effect size.  
+
+$$
+f^2=\frac{R^2_{AB} - R^2_{A}}{1- R^2_{A}}
+$$
+
+```{r echo=FALSE}
+library(knitr)
+library(kableExtra)
+effect_size<-data.frame("Hr_of_day"=2.4364,"Temperature"=1.703, "Day_of_week"=0.5245,
+                        "Could_cover"=0.3755, "Visibility"=0.2582)
+kable(effect_size, "latex") %>%
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+```
+
+
+
